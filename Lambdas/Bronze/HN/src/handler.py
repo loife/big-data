@@ -1,7 +1,6 @@
 import json
 import os
-from time import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 import boto3
 import requests
@@ -160,15 +159,16 @@ def fetch_and_store_all_between(bucket_name, prefix, start_ts, end_ts):
 def fetch_hacker_news(event, context):
     bucket_name = os.environ["HN_BUCKET"]
 
-    end_ts = int(time())
-    start_ts = end_ts - 86400  # 84600 seconds in a day
+    now = datetime.now(timezone.utc)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    yesterday_start = today_start - timedelta(days=1)
+
+    start_ts = int(yesterday_start.timestamp())
+    end_ts = int(today_start.timestamp())
 
     run_ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%SZ")
 
-    prefix = (
-        f"hacker-news/raw/"
-        f"run_ts={run_ts}/"
-    )
+    prefix = f"hacker-news/raw/run_ts={run_ts}/"
 
     print("Fetching Hacker News data")
     print(f"Timestamp window: {start_ts} <= created_at_i < {end_ts}")
