@@ -15,3 +15,16 @@ resource "aws_s3_bucket_public_access_block" "data_lake" {
   ignore_public_acls = true   # ignoriše postojece javne ACL-ove
   restrict_public_buckets = true  # ogranicava pristup samo na autorizovane principale(Lambda role koje kroz IAM polise pisu u bucket)
 }
+
+resource "aws_s3_bucket" "silver_data_lake" {
+  bucket = "social-medias-silver-bigdata-2026"
+}
+
+resource "aws_s3_bucket_public_access_block" "silver_data_lake" {
+  bucket = aws_s3_bucket.silver_data_lake.id
+
+  block_public_acls = true
+  block_public_policy = true
+  ignore_public_acls = true
+  restrict_public_buckets = true
+}

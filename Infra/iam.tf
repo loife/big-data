@@ -64,3 +64,61 @@ resource "aws_iam_role_policy_attachment" "x_logs" {
   role       = aws_iam_role.x_lambda.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
+
+# ---------- SILVER LAMBDA -------------
+
+data "aws_iam_policy_document" "silver_lambda_assume" {
+  statement {
+    actions = ["sts:AssumeRole"]
+
+    principals {
+      type = "Service"
+      identifiers = ["lambda.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role" "silver_lambda" {
+  name = "social-medias-silver-lambda-role"
+  assume_role_policy = data.aws_iam_policy_document.silver_lambda_assume.json
+}
+
+resource "aws_iam_role_policy_attachment" "silver_lambda_basic" {
+  role = aws_iam_role.silver_lambda.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+data "aws_iam_policy_document" "silver_lambda_s3" {
+  statement {
+    sid = "ReadBronze"
+
+    actions = [
+      "s3:GetObject",
+    ]
+
+    resources = [
+      "${aws_s3_bucket.data_lake.arn}/hacker-news/raw/*",
+      "${aws_s3_bucket.data_lake.arn}/x/raw/*",
+    ]
+  }
+
+  statement {
+    sid = "WriteSilver"
+
+    actions = [
+      "s3:PutObject",
+    ]
+
+    resources = [
+      "${aws_s3_bucket.silver_data_lake.arn}/*",
+    ]
+  }
+}
+
+resource "aws_iam_role_policy" "silver_lambda_s3" {
+  name = "social-medias-silver-s3"
+  role = aws_iam_role.silver_lambda.id
+  policy = data.aws_iam_policy_document.silver_lambda_s3.json
+}
+
+# --------------------------------------
