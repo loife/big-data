@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 import hashlib
 import re
 import awswrangler as wr
+from urllib.parse import unquote_plus
 
 import boto3
 
@@ -29,7 +30,7 @@ def normalize_bronze(event, context):
 
     for record in event.get("Records", []):
         source_bucket = record["s3"]["bucket"]["name"]
-        bronze_key = record["s3"]["object"]["key"]
+        bronze_key = unquote_plus(record["s3"]["object"]["key"])
 
         result = process_object(source_bucket, bronze_key)
         results.append(result)
@@ -174,17 +175,6 @@ def normalize_hn_hit(hit: dict):
         "score" : hit.get("points")
     }
 
-    user_data = {
-        "id" : user_id,
-        "username" : author,
-        "platform" : "HN",
-        "karma_score": None, # TODO: Fetch users in bronze
-        "is_verified" : None,
-        "timestamp" : None, # TODO: Nadji negde?
-        "followers" : None
-    }
-
-
     post_children = []
 
     for child in hit.get("children") or []:
@@ -196,10 +186,9 @@ def normalize_hn_hit(hit: dict):
             "child_id": child_id,
         })
 
-    return post_data, user_data, post_children
+    return post_data, post_children
 
 def normalize_hn_post(bucket_name, key):
-    users = []
     posts = []
     post_children = []
     
@@ -212,13 +201,12 @@ def normalize_hn_post(bucket_name, key):
         if normalized is None:
             continue
 
-        post_data, user_data, children_data = normalized
+        post_data, children_data = normalized
 
         posts.append(post_data)
-        users.append(user_data)
         post_children.extend(children_data)
 
-    return pd.DataFrame(users), pd.DataFrame(posts), pd.DataFrame(post_children)
+    return pd.DataFrame(), pd.DataFrame(posts), pd.DataFrame(post_children)
 
 def normalize_hn_user(raw_user: dict):
     username = raw_user.get("id")
