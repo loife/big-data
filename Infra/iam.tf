@@ -4,51 +4,51 @@ data "aws_iam_policy_document" "lambda_assume" {
   statement {
     actions = ["sts:AssumeRole"]
     principals {
-      type = "Service"
-      identifiers = ["lambda.amazonaws.com"]  # principal je Lambda servis
+      type        = "Service"
+      identifiers = ["lambda.amazonaws.com"] # principal je Lambda servis
     }
   }
 }
 
 # IAM rola koju preuzima HN Lambda tokom izvrsavanja
 resource "aws_iam_role" "hn_lambda" {
-  name = "social-medias-hn-bronze-role"
-  assume_role_policy = data.aws_iam_policy_document.lambda_assume.json  # KO
+  name               = "social-medias-hn-bronze-role"
+  assume_role_policy = data.aws_iam_policy_document.lambda_assume.json # KO
 }
 
 # Identity-based policy (STA rola smije da radi) - HN Lambda smije samo PutObject
 # i to iskljucivo u hacker-news/ prefiks bucketa; primjena least privilege
 data "aws_iam_policy_document" "hn_s3" {
   statement {
-    actions = ["s3:PutObject"]
-    resources = ["${aws_s3_bucket.data_lake.arn}/hacker-news/*"]  # samo svoj prefiks
+    actions   = ["s3:PutObject"]
+    resources = ["${aws_s3_bucket.data_lake.arn}/hacker-news/*"] # samo svoj prefiks
   }
 }
 
 # Kacenje identity-based policy na HN rolu (inline policy)
 resource "aws_iam_role_policy" "hn_s3" {
-  name = "social-medias-hn-s3"
-  role = aws_iam_role.hn_lambda.id
-  policy = data.aws_iam_policy_document.hn_s3.json   # STA
+  name   = "social-medias-hn-s3"
+  role   = aws_iam_role.hn_lambda.id
+  policy = data.aws_iam_policy_document.hn_s3.json # STA
 }
 
 # Predefinisana AWS managed policy - daje HN Lambdi pravo pisanja logova u CloudWatch
 resource "aws_iam_role_policy_attachment" "hn_logs" {
-  role = aws_iam_role.hn_lambda.name
+  role       = aws_iam_role.hn_lambda.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
 # IAM rola koju preuzima X (Twitter) Lambda; koristi istu trust policy kao HN
 resource "aws_iam_role" "x_lambda" {
-  name = "social-medias-x-bronze-role"
-  assume_role_policy = data.aws_iam_policy_document.lambda_assume.json  # KO
+  name               = "social-medias-x-bronze-role"
+  assume_role_policy = data.aws_iam_policy_document.lambda_assume.json # KO
 }
 
 # Identity-based policy za X Lambdu - PutObject iskljucivo u x/ prefiks
 data "aws_iam_policy_document" "x_s3" {
   statement {
-    actions = ["s3:PutObject"]
-    resources = ["${aws_s3_bucket.data_lake.arn}/x/*"]   # samo svoj prefiks
+    actions   = ["s3:PutObject"]
+    resources = ["${aws_s3_bucket.data_lake.arn}/x/*"] # samo svoj prefiks
   }
 }
 
@@ -72,19 +72,19 @@ data "aws_iam_policy_document" "silver_lambda_assume" {
     actions = ["sts:AssumeRole"]
 
     principals {
-      type = "Service"
+      type        = "Service"
       identifiers = ["lambda.amazonaws.com"]
     }
   }
 }
 
 resource "aws_iam_role" "silver_lambda" {
-  name = "social-medias-silver-lambda-role"
+  name               = "social-medias-silver-lambda-role"
   assume_role_policy = data.aws_iam_policy_document.silver_lambda_assume.json
 }
 
 resource "aws_iam_role_policy_attachment" "silver_lambda_basic" {
-  role = aws_iam_role.silver_lambda.name
+  role       = aws_iam_role.silver_lambda.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
@@ -97,8 +97,20 @@ data "aws_iam_policy_document" "silver_lambda_s3" {
     ]
 
     resources = [
-      "${aws_s3_bucket.data_lake.arn}/hacker-news/raw/*",
+      "${aws_s3_bucket.data_lake.arn}/hacker-news/*",
       "${aws_s3_bucket.data_lake.arn}/x/raw/*",
+    ]
+  }
+
+  statement {
+    sid = "ListBronze"
+
+    actions = [
+      "s3:ListBucket",
+    ]
+
+    resources = [
+      aws_s3_bucket.data_lake.arn,
     ]
   }
 
@@ -116,8 +128,8 @@ data "aws_iam_policy_document" "silver_lambda_s3" {
 }
 
 resource "aws_iam_role_policy" "silver_lambda_s3" {
-  name = "social-medias-silver-s3"
-  role = aws_iam_role.silver_lambda.id
+  name   = "social-medias-silver-s3"
+  role   = aws_iam_role.silver_lambda.id
   policy = data.aws_iam_policy_document.silver_lambda_s3.json
 }
 

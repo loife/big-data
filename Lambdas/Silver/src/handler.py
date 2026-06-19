@@ -12,9 +12,11 @@ import boto3
 
 s3 = boto3.client("s3")
 
-
-BRONZE_PREFIX_HN = "hacker-news/raw/"
+BRONZE_PREFIX_HN_POST = "hacker-news/raw/"
+BRONZE_PREFIX_HN_USER = "hacker-news/users/"
+BRONZE_PREFIX_HN_MANIFEST = "hacker-news/manifests/"
 BRONZE_PREFIX_X = "x/raw/"
+
 CLEANR = re.compile('<.*?>') 
 
 def read_s3_object(bucket_name, key):
@@ -40,17 +42,21 @@ def normalize_bronze(event, context):
 def process_object(source_bucket, bronze_key):
     silver_bucket = os.environ["SILVER_BUCKET"]
 
-    if bronze_key.startswith(BRONZE_PREFIX_HN):
-        users, posts, post_children = normalize_hn_file(source_bucket,bronze_key)
+    if bronze_key.startswith(BRONZE_PREFIX_HN_MANIFEST):
+        users_df, posts_df, post_children_df = process_hn_manifest(source_bucket, bronze_key)
 
-        users_df = pd.DataFrame(users)
-        posts_df = pd.DataFrame(posts)
-        post_children_df = pd.DataFrame(post_children)
+    elif bronze_key.startswith(BRONZE_PREFIX_HN_POST):
+        users_df, posts_df, post_children_df = normalize_hn_post(source_bucket, bronze_key)
 
     elif bronze_key.startswith(BRONZE_PREFIX_X):
-        platform = "x"
-
         users_df, posts_df, post_children_df = normalize_x_file(source_bucket,bronze_key)
+    
+    elif bronze_key.startswith(BRONZE_PREFIX_HN_USER):
+        return {
+            "status": "skipped",
+            "source_bucket": source_bucket,
+            "source_key": bronze_key,
+        }
 
     else:
         print(f"Could not read object type: s3://{source_bucket}/{bronze_key}")
@@ -192,7 +198,7 @@ def normalize_hn_hit(hit: dict):
 
     return post_data, user_data, post_children
 
-def normalize_hn_file(bucket_name, key):
+def normalize_hn_post(bucket_name, key):
     users = []
     posts = []
     post_children = []
@@ -212,8 +218,54 @@ def normalize_hn_file(bucket_name, key):
         users.append(user_data)
         post_children.extend(children_data)
 
-    return users, posts, post_children
+    return pd.DataFrame(users), pd.DataFrame(posts), pd.DataFrame(post_children)
 
+def normalize_hn_user(raw_user: dict):
+    username = raw_user.get("id")
+    if not username:
+        return None
+
+    user_id = hashlib.sha256(f"HN_USER|{username}".encode("utf-8")).hexdigest()
+
+    created = raw_user.get("created")
+    created_at = None
+    if created is not None:
+        created_at = (
+            datetime.fromtimestamp(int(created), tz=timezone.utc)
+            .isoformat()
+            .replace("+00:00", "Z")
+        )
+
+    return {
+        "id": user_id,
+        "username": username,
+        "platform": "HN",
+        "karma_score": raw_user.get("karma"),
+        "is_verified": None,
+        "timestamp": created_at,
+        "followers": None,
+    }
+
+def process_hn_manifest(source_bucket, bronze_key):
+    manifest = json.loads(read_s3_object(source_bucket, bronze_key).decode("utf-8"))
+    users_prefix = manifest["users_prefix"]
+
+    raw_users = []
+    paginator = s3.get_paginator("list_objects_v2")
+
+    for page in paginator.paginate(Bucket=source_bucket, Prefix=users_prefix):
+        for obj in page.get("Contents", []):
+            key = obj["Key"]
+            if not key.endswith(".json"):
+                continue
+
+            raw_user = json.loads(read_s3_object(source_bucket, key).decode("utf-8"))
+            normalized = normalize_hn_user(raw_user)
+            if normalized is not None:
+                raw_users.append(normalized)
+
+    users_df = pd.DataFrame(raw_users)
+    return users_df, pd.DataFrame(), pd.DataFrame()
 
 def normalize_x_file(bucket_name, key):
     raw_bytes = read_s3_object(bucket_name, key)

@@ -22,6 +22,8 @@ __pycache__/
 
 # Lambda zip build
 Infra/build/
+Lambdas/*/build/
+Lambdas/*/*/build/
 
 # Python biblioteke u Lambda src
 Lambdas/Bronze/HN/src/*/
