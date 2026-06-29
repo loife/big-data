@@ -7,11 +7,23 @@ resource "aws_lambda_function" "silver" {
   timeout     = 300
   memory_size = 1024
 
+  # f-ja radi unutar privatnog subneta
+  vpc_config {
+    subnet_ids         = [aws_subnet.private.id]
+    security_group_ids = [aws_security_group.lambda.id]
+  }
+
   environment {
     variables = {
       SILVER_BUCKET = aws_s3_bucket.silver_data_lake.id
     }
   }
+}
+
+# dozvola za rad u VPCu
+resource "aws_iam_role_policy_attachment" "silver_vpc" {
+  role       = aws_iam_role.silver_lambda.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
 }
 
 resource "aws_lambda_permission" "invoke_silver" {

@@ -7,6 +7,7 @@ data "archive_file" "hn" {
 }
 
 # HN Lambda funkcija - prikuplja podatke sa Hacker News API-ja i upisuje sirov JSON u S3
+# HN lambda je namerno van VPCa jer je jedina je kojoj treba izlaz na internet (Hacker News API)
 resource "aws_lambda_function" "hn" {
   function_name    = "social-medias-hn-bronze"
   role             = aws_iam_role.hn_lambda.arn  # rola koju funkcija preuzima

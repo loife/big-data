@@ -19,6 +19,7 @@ __pycache__/
 # AWS / kredencijali
 .env
 *.pem
+terraform.tfvars
 
 # Lambda zip build
 Infra/build/

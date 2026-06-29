@@ -17,9 +17,21 @@ resource "aws_lambda_function" "x" {
   filename         = data.archive_file.x.output_path
   source_code_hash = data.archive_file.x.output_base64sha256 # hash za detekciju izmena koda
 
+  # funkcija radi unutar privatnog subneta
+  vpc_config {
+    subnet_ids         = [aws_subnet.private.id]
+    security_group_ids = [aws_security_group.lambda.id]
+  }
+
   environment {
     variables = {
       X_BUCKET = aws_s3_bucket.data_lake.id # ime bucketa kao env var
     }
   }
+}
+
+# dozvola za rad u VPC
+resource "aws_iam_role_policy_attachment" "x_vpc" {
+  role       = aws_iam_role.x_lambda.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
 }

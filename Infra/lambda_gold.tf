@@ -78,12 +78,24 @@ resource "aws_lambda_function" "gold" {
   timeout     = 300
   memory_size = 1024
 
+  # fja radi unutar privatnog subneta
+  vpc_config {
+    subnet_ids         = [aws_subnet.private.id]
+    security_group_ids = [aws_security_group.lambda.id]
+  }
+
   environment {
     variables = {
       SILVER_BUCKET = local.silver_bucket_name
       GOLD_BUCKET   = aws_s3_bucket.gold_data_lake.id
     }
   }
+}
+
+# Dozvola za rad u VPCu
+resource "aws_iam_role_policy_attachment" "gold_vpc" {
+  role       = aws_iam_role.gold_lambda.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
 }
 
 resource "aws_cloudwatch_event_rule" "gold_daily" {
