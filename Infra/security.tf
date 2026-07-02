@@ -77,6 +77,7 @@ resource "aws_vpc_security_group_egress_rule" "ec2_dns_tcp" {
 # SG za Lambda funkcije
 resource "aws_security_group" "lambda" {
   name        = "social-medias-lambda-sg"
+  description = "Odlazni saobracaj Lambdi: Postgres ka EC2 i HTTPS ka S3/HN API"
   vpc_id      = aws_vpc.main.id
 
   tags = {
