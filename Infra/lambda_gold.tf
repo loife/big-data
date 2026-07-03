@@ -2,16 +2,19 @@ locals {
   silver_bucket_name = "social-medias-silver-bigdata-2026"
 }
 
+# elastic container registry repo - skladiste za docker image
 resource "aws_ecr_repository" "gold" {
   name                 = "social-medias-gold"
   image_tag_mutability = "MUTABLE"
   force_delete         = true
 }
 
+# s3 bucket - tu gold lambda upisuje metrike tj parquet
 resource "aws_s3_bucket" "gold_data_lake" {
   bucket = "social-medias-gold-bigdata-2026"
 }
 
+# potpuno zakljucavanje baketa od javnog pristupa  sa interneta
 resource "aws_s3_bucket_public_access_block" "gold_data_lake" {
   bucket = aws_s3_bucket.gold_data_lake.id
 
@@ -21,19 +24,21 @@ resource "aws_s3_bucket_public_access_block" "gold_data_lake" {
   restrict_public_buckets = true
 }
 
+# ovo je iam rola, identitet koji lambda preuzima dok radi
 resource "aws_iam_role" "gold_lambda" {
   name = "social-medias-gold-lambda"
 
-  assume_role_policy = jsonencode({
+  assume_role_policy = jsonencode({ # KO smije da preuzme ovu rolu, aws trazi json
     Version = "2012-10-17"
     Statement = [{
       Action    = "sts:AssumeRole"
       Effect    = "Allow"
-      Principal = { Service = "lambda.amazonaws.com" }
+      Principal = { Service = "lambda.amazonaws.com" }  # samo lambda servis preuzima rolu
     }]
   })
 }
 
+# ovo je STA rola smije da radi, citaj samo silver, pisi samo gold, plus logovi
 resource "aws_iam_role_policy" "gold_lambda" {
   name = "social-medias-gold-policy"
   role = aws_iam_role.gold_lambda.id
@@ -42,6 +47,7 @@ resource "aws_iam_role_policy" "gold_lambda" {
     Version = "2012-10-17"
     Statement = [
       {
+        # citanje silvera
         Sid    = "ReadSilver"
         Effect = "Allow"
         Action = ["s3:GetObject", "s3:ListBucket"]
@@ -51,6 +57,7 @@ resource "aws_iam_role_policy" "gold_lambda" {
         ]
       },
       {
+        # pisanje golda
         Sid    = "WriteGold"
         Effect = "Allow"
         Action = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:ListBucket"]
@@ -60,6 +67,7 @@ resource "aws_iam_role_policy" "gold_lambda" {
         ]
       },
       {
+        # dozvola za pisanje logova u cloudwatch
         Sid      = "Logs"
         Effect   = "Allow"
         Action   = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
@@ -69,11 +77,12 @@ resource "aws_iam_role_policy" "gold_lambda" {
   })
 }
 
+# pokrece se kao docker image, unutar vpc-a
 resource "aws_lambda_function" "gold" {
   function_name = "social-medias-gold"
   role          = aws_iam_role.gold_lambda.arn
-  package_type  = "Image"
-  image_uri     = "${aws_ecr_repository.gold.repository_url}:latest"
+  package_type  = "Image" # docker image, ne zip
+  image_uri     = "${aws_ecr_repository.gold.repository_url}:latest"  # ovo je image uri iz ecr-a
 
   timeout     = 300
   memory_size = 1024
@@ -84,6 +93,7 @@ resource "aws_lambda_function" "gold" {
     security_group_ids = [aws_security_group.lambda.id]
   }
 
+  # env varijable koje kod cita preko os.environ, da se imena ne hardkoduju u pajtonu
   environment {
     variables = {
       SILVER_BUCKET = local.silver_bucket_name
@@ -98,16 +108,19 @@ resource "aws_iam_role_policy_attachment" "gold_vpc" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
 }
 
+# event bridge - pokrece gold lambdu svaki dan u 6+2 sati
 resource "aws_cloudwatch_event_rule" "gold_daily" {
   name                = "social-medias-gold-daily"
   schedule_expression = "cron(0 6 * * ? *)"
 }
 
+# sta se okida: povezuje raspored sa gold lambdom
 resource "aws_cloudwatch_event_target" "gold_daily" {
   rule = aws_cloudwatch_event_rule.gold_daily.name
   arn  = aws_lambda_function.gold.arn
 }
 
+# dozvola da event bridge smije da pozove ovu lambdu
 resource "aws_lambda_permission" "invoke_gold" {
   statement_id  = "AllowGoldScheduledInvocation"
   action        = "lambda:InvokeFunction"

@@ -9,7 +9,7 @@ GOLD_BUCKET = os.environ["GOLD_BUCKET"]
 
 HN_POST_TYPES = ["story", "ask_hn", "comment", "job", "poll"]
 
-
+# bira datume, ako je poziv sa {"date"} bira taj datum, u suprotnom juce
 def _resolve_date(event):
     if event and event.get("date"):
         return event["date"]
@@ -17,6 +17,7 @@ def _resolve_date(event):
     return yesterday.strftime("%Y-%m-%d")
 
 
+# cita parquet sa s3 i vraca DataFrame
 def _read_safe(path, **kwargs):
     try:
         dfs = list(
@@ -34,22 +35,23 @@ def _read_safe(path, **kwargs):
     return pd.concat(dfs, ignore_index=True)
 
 
+# cita korisnike
 def read_users(platform=None):
     path = f"s3://{SILVER_BUCKET}/users/"
     if platform is not None:
         return _read_safe(path, partition_filter=lambda p: p["platform"] == platform)
     return _read_safe(path)
 
-
+# cita post za datum
 def read_posts_for_date(target_date):
     path = f"s3://{SILVER_BUCKET}/posts/"
     return _read_safe(path, partition_filter=lambda p: p["date"] == target_date)
 
-
+# cita post_children iz silvera, tabelu koja cuva vezu roditelj-dijete izmedju postova, tj. koji komentar pripada kojem postu
 def read_post_children():
     return _read_safe(f"s3://{SILVER_BUCKET}/post_children/")
 
-
+# pise data frame kao parquet u gold bucket
 def _write(df, table, partition_cols):
     if df is None or df.empty:
         print(f"[gold] {table}: nothing to write")
@@ -145,7 +147,7 @@ def _top_posts_by_score(posts, post_type, target_date):
     df["date"] = target_date
     return df[["date", "rank", "id", "original_id", "author", "content", "score"]]
 
-
+# mjeri koliko su podaci popunjeni, nisu prazni
 def kpi_data_quality(tables, run_date):
     rows = []
     for name, df in tables.items():
