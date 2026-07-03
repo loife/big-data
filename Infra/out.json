@@ -1,0 +1,1 @@
+{"errorMessage": "'int' object has no attribute 'get'", "errorType": "AttributeError", "requestId": "c187e81e-da26-4e63-a8cf-1f2955afbed5", "stackTrace": ["  File \"/var/task/handler.py\", line 215, in transform_gold\n    target_date = _resolve_date(event or {})\n", "  File \"/var/task/handler.py\", line 36, in _resolve_date\n    if event and event.get(\"date\"):\n"]}

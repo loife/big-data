@@ -4,10 +4,10 @@ import urllib.request
 
 DISCORD_WEBHOOK_URL = os.environ["DISCORD_WEBHOOK_URL"]
 
-
+# pomocna funkcija koja salje jednu poruku na diskord
 def _post_to_discord(content):
-    payload = json.dumps({"content": content}).encode("utf-8")
-    req = urllib.request.Request(
+    payload = json.dumps({"content": content}).encode("utf-8")  # discord ocekuje json
+    req = urllib.request.Request(       # kreira se http zahtjev
         DISCORD_WEBHOOK_URL,
         data=payload,
         headers={
@@ -16,14 +16,14 @@ def _post_to_discord(content):
         },
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=10) as resp:
+    with urllib.request.urlopen(req, timeout=10) as resp:       # salje http zahtjev
         return resp.status
 
-
+# glavna funkcija koju aws automatski poziva
 def notify(event, context):
-    for record in event.get("Records", []):
-        sns = record.get("Sns", {})
-        subject = sns.get("Subject") or "Job failed"
+    for record in event.get("Records", []):     # prolazi kroz sve poruke
+        sns = record.get("Sns", {}) # uzima sns podatke
+        subject = sns.get("Subject") or "Job failed"    # izvlaci subject i message
 
         message = sns.get("Message", "")
         alarm_name = None
